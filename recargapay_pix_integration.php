@@ -1,4 +1,4 @@
- <?php
+<?php
 
 /**
  * INTEGRAÇÃO RECARGAPAY PIX - CENTRAL DE CHECKERS
@@ -139,42 +139,12 @@ class RecargaPayPixIntegration {
     }
     
     /**
-     * Gera dados do QR Code
+     * Gera dados do QR Code (agora desabilitada)
      */
-private function generateQRCodeData($pixCode) {
-    try {
-        // Garante que a classe exista antes de usar
-        if (!class_exists('QRcode')) {
-            require_once __DIR__ . '/phpqrcode.php';
-        }
-
-        ob_start();
-        \QRcode::png($pixCode, false, QR_ECLEVEL_L, 10, 2);
-        $pngData = ob_get_contents();
-        ob_end_clean();
-
-        if (empty($pngData)) {
-             throw new Exception("Gerador de QR Code retornou saida vazia.");
-        }
-
-        return 'data:image/png;base64,' . base64_encode($pngData);
-
-    } catch (Exception $e) {
-        ob_start();
-        $im = imagecreate(250, 120);
-        $bg = imagecolorallocate($im, 240, 240, 240);
-        $textcolor = imagecolorallocate($im, 200, 0, 0);
-        imagestring($im, 5, 20, 10, "Erro ao gerar QR Code:", $textcolor);
-        $errorMessage = wordwrap($e->getMessage(), 35, "\n");
-        imagestring($im, 3, 15, 40, $errorMessage, $textcolor);
-        imagepng($im);
-        imagedestroy($im);
-        $errorPngData = ob_get_contents();
-        ob_end_clean();
-
-        return 'data:image/png;base64,' . base64_encode($errorPngData);
+    private function generateQRCodeData($pixCode) {
+        // Retorna uma string vazia para não gerar o QR Code
+        return '';
     }
-}
     
     /**
      * Cria pagamento PIX no RecargaPay
