@@ -1,9 +1,22 @@
- <?php
+<?php
 session_start();
 
 // --- ATIVAR EXIBIÇÃO DE ERROS PARA DEBUG ---
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
+
+// --- LÓGICA DE LIMPEZA AUTOMÁTICA (ALTERNATIVA AO CRON JOB) ---
+$cleanup_interval = 3600; // Intervalo em segundos (3600 = 1 hora)
+$last_run_file = __DIR__ . '/last_cleanup_run.txt';
+
+if (!file_exists($last_run_file) || (time() - filemtime($last_run_file)) > $cleanup_interval) {
+    // Tenta executar a limpeza
+    @include 'cleanup_pix.php';
+    // Atualiza o arquivo com a hora atual
+    @touch($last_run_file);
+}
+// --- FIM DA LÓGICA DE LIMPEZA ---
+
 
 // --- CONFIGURAÇÃO DO BANCO DE DADOS ---
 // Exemplo: Substitua os valores abaixo pelos seus dados da InfinityFree
@@ -23,7 +36,7 @@ function redirect($url) {
     header("Location: " . $url);
     exit();
 }
-
+// ... resto do código do index.php sem alterações ...
 function require_auth() {
     if (!isset($_SESSION['user_id'])) {
         redirect('index.php?page=login&error=auth_required');
@@ -373,17 +386,6 @@ if (isset($_SESSION['user_id'])) {
         overflow-y: auto;
     }
 
-    .qr-code {
-        text-align: center;
-        margin: 2rem 0;
-    }
-
-    .qr-code img {
-        max-width: 200px;
-        border: 2px solid var(--primary);
-        border-radius: var(--radius-md);
-    }
-
     .payment-info {
         background: var(--bg-glass);
         border-radius: var(--radius-md);
@@ -686,7 +688,75 @@ if (isset($_SESSION['user_id'])) {
 
     <?php elseif ($page === 'profile'): ?>
     <?php require_auth(); ?>
-    <!-- Código da página de perfil existente... -->
+    <div class="dashboard-container fade-in">
+        <div class="dashboard-header">
+            <div class="user-info">
+                <div class="user-avatar">
+                    <?php if (!empty($_SESSION['avatar']) && file_exists(AVATAR_PATH . $_SESSION['avatar'])): ?>
+                    <img src="<?= AVATAR_PATH . sanitize_input($_SESSION['avatar']) ?>" alt="Avatar"
+                        style="width:100%; height:100%; object-fit: cover; border-radius: 50%;">
+                    <?php else: ?>
+                    <?= strtoupper(substr($_SESSION['username'], 0, 2)) ?>
+                    <?php endif; ?>
+                </div>
+                <div>
+                    <div style="font-weight: 600;">Gerenciar Perfil</div>
+                    <div style="color: var(--text-secondary); font-size: 0.9rem;"><?= sanitize_input($_SESSION['username']) ?></div>
+                </div>
+            </div>
+            <a href="?page=dashboard" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+
+        <div class="main-card">
+            <?php if (!empty($feedback_message)): ?>
+            <div class="feedback <?= $feedback_type ?>">
+                <i class="fas fa-<?= $feedback_type === 'success' ? 'check-circle' : 'exclamation-triangle' ?>"></i>
+                <?= sanitize_input($feedback_message) ?>
+            </div>
+            <?php endif; ?>
+
+            <!-- Atualizar Avatar -->
+            <div class="profile-section">
+                <h3 style="color: var(--primary); margin-bottom: 1.5rem;">Alterar Foto de Perfil</h3>
+                <form action="index.php?page=profile" method="POST" enctype="multipart/form-data">
+                    <input type="hidden" name="action" value="update_avatar">
+                    <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>">
+                    <div class="form-group">
+                        <label for="avatar" class="form-label">Selecione uma imagem (JPG, PNG, GIF - máx 2MB)</label>
+                        <input type="file" id="avatar" name="avatar" class="form-input" accept="image/*" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-upload"></i> Salvar Nova Foto</button>
+                </form>
+            </div>
+
+            <hr style="border: 1px solid var(--bg-glass); margin: 3rem 0;">
+
+            <!-- Alterar Senha -->
+            <div class="profile-section">
+                <h3 style="color: var(--primary); margin-bottom: 1.5rem;">Alterar Senha</h3>
+                <form action="index.php?page=profile" method="POST">
+                    <input type="hidden" name="action" value="update_password">
+                    <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>">
+                    <div class="form-group">
+                        <label for="current_password" class="form-label">Senha Atual</label>
+                        <input type="password" id="current_password" name="current_password" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="new_password" class="form-label">Nova Senha</label>
+                        <input type="password" id="new_password" name="new_password" class="form-input" required minlength="8">
+                    </div>
+                    <div class="form-group">
+                        <label for="confirm_password" class="form-label">Confirmar Nova Senha</label>
+                        <input type="password" id="confirm_password" name="confirm_password" class="form-input" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-key"></i> Mudar Senha</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
 
     <?php else: ?>
     <div class="main-container">
@@ -859,7 +929,7 @@ if (isset($_SESSION['user_id'])) {
     document.addEventListener('DOMContentLoaded', loadTransactionHistory);
     </script>
     <script>
-    let currentPaymentId = null; // <-- ADICIONE ESTA LINHA
+    let currentPaymentId = null; 
     // Sistema de Créditos - JavaScript com API Real
 
     function openRechargeModal() {
@@ -952,9 +1022,9 @@ if (isset($_SESSION['user_id'])) {
             generateBtn.innerHTML = '<i class="fas fa-qrcode"></i> Gerar PIX';
         }
     }
-
+    
     function showPixPayment(paymentData) {
-        currentPaymentId = paymentData.payment_id; // <-- ADICIONE ESTA LINHA
+        currentPaymentId = paymentData.payment_id;
         const content = `
             <div class="payment-info">
                 <h4 style="margin-bottom: 1rem; color: var(--primary);">Pague para adicionar os créditos</h4>
@@ -965,13 +1035,8 @@ if (isset($_SESSION['user_id'])) {
                 </div>
             </div>
             
-            <div class="qr-code">
-                <p style="margin-bottom: 1rem; color: var(--text-secondary);">Escaneie o QR Code com o app do seu banco:</p>
-                <img src="${paymentData.qr_code_data}" alt="PIX QR Code" style="max-width: 250px; border: 4px solid var(--primary); border-radius: var(--radius-md);">
-            </div>
-
             <div class="form-group" style="margin-top: 1.5rem;">
-                <label class="form-label">Ou use o PIX Copia e Cola:</label>
+                <label class="form-label">Use o PIX Copia e Cola:</label>
                 <div style="display: flex; gap: 0.5rem;">
                     <input type="text" id="pixCodeInput" class="form-input" value="${paymentData.pix_code}" readonly>
                     <button onclick="copyPixCode()" class="btn btn-secondary" title="Copiar Código">
@@ -998,6 +1063,7 @@ if (isset($_SESSION['user_id'])) {
         startPaymentTimer(paymentData.expires_in_minutes * 60, paymentData.payment_id);
     }
 
+
     function copyPixCode() {
         const input = document.getElementById('pixCodeInput');
         input.select();
@@ -1014,11 +1080,11 @@ if (isset($_SESSION['user_id'])) {
             await fetch('pix_api_recargapay.php?endpoint=cancel', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '<?= generate_csrf_token() ?>' // Adicionado para segurança
                 },
                 body: JSON.stringify({
-                    payment_id: currentPaymentId,
-                    csrf_token: '<?= generate_csrf_token() ?>'
+                    payment_id: currentPaymentId
                 })
             });
             console.log('Pagamento pendente cancelado:', currentPaymentId);
@@ -1108,4 +1174,4 @@ if (isset($_SESSION['user_id'])) {
     </script>
 </body>
 
-</html
+</html>
