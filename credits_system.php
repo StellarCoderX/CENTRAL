@@ -1,4 +1,4 @@
- <?php
+<?php
 /**
  * SISTEMA DE CRÉDITOS - CENTRAL DE CHECKERS
  * Gerenciamento completo de créditos e transações
@@ -74,6 +74,25 @@ class CreditSystem {
      */
     public function hasSufficientBalance($userId, $amount) {
         return $this->getUserBalance($userId) >= $amount;
+    }
+
+    /**
+     * Cria uma transação de crédito com status pendente.
+     * Usado para pagamentos que precisam de confirmação (como PIX).
+     */
+    public function createCreditTransaction($userId, $amount, $description, $referenceId = null) {
+        try {
+            $stmt = $this->pdo->prepare("
+                INSERT INTO credit_transactions 
+                (user_id, transaction_type, amount, description, reference_id, status) 
+                VALUES (?, 'credit', ?, ?, ?, 'pending')
+            ");
+            $stmt->execute([$userId, $amount, $description, $referenceId]);
+            return $this->pdo->lastInsertId();
+        } catch (Exception $e) {
+            error_log("Erro ao criar transação de crédito pendente: " . $e->getMessage());
+            return false;
+        }
     }
     
     /**
