@@ -1,4 +1,4 @@
- <?php
+<?php
 /**
  * API PIX RECARGAPAY - CENTRAL DE CHECKERS
  * Endpoints para gerenciar pagamentos PIX via RecargaPay
@@ -95,24 +95,23 @@ try {
             break;
             
         // POST /api/pix/generate - Gerar pagamento PIX RecargaPay
-        // Em pix_api_recargapay.php, dentro do switch
-            case 'generate':
-                if ($method !== 'POST') {
-                    jsonResponse(['error' => 'Método não permitido'], 405);
-                }
-                
-                $userId = validateAuth();
-                
-                // 1. Lemos o corpo da requisição JSON PRIMEIRO
-                $input = json_decode(file_get_contents('php://input'), true);
-
-                // 2. Passamos os dados lidos para a validação do CSRF
-                validateCSRF($input);
-                
-                // 3. Agora podemos usar os dados para o resto da lógica
-                $amount = floatval($input['amount'] ?? 0);
-                $description = sanitize_input($input['description'] ?? 'Recarga de créditos');
+        case 'generate':
+            if ($method !== 'POST') {
+                jsonResponse(['error' => 'Método não permitido'], 405);
+            }
             
+            $userId = validateAuth();
+            
+            // 1. Lemos o corpo da requisição JSON PRIMEIRO
+            $input = json_decode(file_get_contents('php://input'), true);
+
+            // 2. Passamos os dados lidos para a validação do CSRF
+            validateCSRF($input);
+            
+            // 3. Agora podemos usar os dados para o resto da lógica
+            $amount = floatval($input['amount'] ?? 0);
+            $description = sanitize_input($input['description'] ?? 'Recarga de créditos');
+        
             if (!$creditSystem->validateRechargeAmount($amount)) {
                 $minAmount = $creditSystem->getSetting('minimum_recharge_amount', '50.00');
                 jsonResponse([
@@ -121,10 +120,14 @@ try {
                 ], 400);
             }
             
-            // Remove a chamada da API do RecargaPay.
+            // Chamar o sistema RecargaPay para criar o pagamento
+            $paymentData = $recargaPaySystem->createRecargaPayPayment($userId, $amount, $description);
+
+            // Retornar os dados do pagamento para o frontend
             jsonResponse([
                 'success' => true,
                 'provider' => 'RecargaPay',
+                'payment' => $paymentData, // Estrutura correta para o frontend
                 'message' => 'Pagamento PIX RecargaPay gerado com sucesso'
             ]);
             break;
@@ -195,9 +198,9 @@ try {
             }
             
             $userId = validateAuth();
-            validateCSRF();
             
             $input = json_decode(file_get_contents('php://input'), true);
+            validateCSRF($input); // Passa o input para a validação
             $paymentId = $input['payment_id'] ?? '';
             
             if (empty($paymentId)) {
@@ -206,15 +209,14 @@ try {
             
             // Verificar se o pagamento existe e pertence ao usuário
             $stmt = $pdo->prepare("
-                SELECT pp.*, ct.user_id 
+                SELECT pp.*
                 FROM pix_payments pp
-                JOIN credit_transactions ct ON pp.transaction_id = ct.id
-                WHERE pp.payment_id = ?
+                WHERE pp.payment_id = ? AND pp.user_id = ?
             ");
-            $stmt->execute([$paymentId]);
+            $stmt->execute([$paymentId, $userId]);
             $payment = $stmt->fetch();
             
-            if (!$payment || $payment['user_id'] != $userId) {
+            if (!$payment) {
                 jsonResponse(['error' => 'Pagamento não encontrado'], 404);
             }
             
